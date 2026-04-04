@@ -21,6 +21,9 @@ const PERSONALITY_FILES: &[&str] = &[
     "HEARTBEAT.md",
     "BOOTSTRAP.md",
     "MEMORY.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".gemini/GEMINI.md",
 ];
 
 /// A single personality file loaded from the workspace.
