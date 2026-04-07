@@ -103,7 +103,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 # memvid: portable single-file AI memory layer (BM25 + optional HNSW)
-memvid-core = { path = "/tmp/memvid", features = ["lex"], default-features = false }
+memvid-core = { git = "https://github.com/ketherchau/memvid.git", features = ["lex"], default-features = false }
 
 # Aardvark I2C/SPI/GPIO USB adapter (Total Phase) — stub when SDK absent
 aardvark-sys = { path = "crates/aardvark-sys", version = "0.1.0" }
