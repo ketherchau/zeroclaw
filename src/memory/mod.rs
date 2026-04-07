@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod backend;
 pub mod chunker;
+pub mod memvid;
 pub mod cli;
 pub mod conflict;
 pub mod consolidation;
@@ -69,6 +70,10 @@ where
         }
         MemoryBackendKind::Qdrant | MemoryBackendKind::Markdown => {
             Ok(Box::new(MarkdownMemory::new(workspace_dir)))
+        }
+        MemoryBackendKind::Memvid => {
+            let path = workspace_dir.join("memory").join("brain.mv2");
+            Ok(Box::new(memvid::MemvidMemory::open_or_create(path)?))
         }
         MemoryBackendKind::None => Ok(Box::new(NoneMemory::new())),
         MemoryBackendKind::Unknown => {
