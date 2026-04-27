@@ -48,6 +48,7 @@ impl SystemPromptBuilder {
             sections: vec![
                 Box::new(DateTimeSection),
                 Box::new(IdentitySection),
+                Box::new(MemorySnapshotSection),
                 Box::new(ToolHonestySection),
                 Box::new(ToolsSection),
                 Box::new(SafetySection),
@@ -79,6 +80,7 @@ impl SystemPromptBuilder {
 }
 
 pub struct IdentitySection;
+pub struct MemorySnapshotSection;
 pub struct ToolHonestySection;
 pub struct ToolsSection;
 pub struct SafetySection;
@@ -87,6 +89,22 @@ pub struct WorkspaceSection;
 pub struct RuntimeSection;
 pub struct DateTimeSection;
 pub struct ChannelMediaSection;
+
+impl PromptSection for MemorySnapshotSection {
+    fn name(&self) -> &str {
+        "memory_snapshot"
+    }
+
+    fn build(&self, ctx: &PromptContext<'_>) -> Result<String> {
+        let snapshot_path = ctx.workspace_dir.join("MEMORY_SNAPSHOT.md");
+        if snapshot_path.exists() {
+            let content = std::fs::read_to_string(snapshot_path)?;
+            Ok(format!("## Core Memories (Snapshot)\n\n{content}"))
+        } else {
+            Ok(String::new())
+        }
+    }
+}
 
 impl PromptSection for IdentitySection {
     fn name(&self) -> &str {
@@ -681,5 +699,59 @@ mod tests {
             output.contains("bypass oversight"),
             "supervised should include 'bypass oversight' instructions"
         );
+    }
+
+    #[test]
+    fn memory_snapshot_section_includes_file_content_if_exists() {
+        let workspace =
+            std::env::temp_dir().join(format!("zeroclaw_prompt_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(workspace.join("MEMORY_SNAPSHOT.md"), "snapshot_content_123").unwrap();
+
+        let tools: Vec<Box<dyn Tool>> = vec![];
+        let ctx = PromptContext {
+            workspace_dir: &workspace,
+            model_name: "test-model",
+            tools: &tools,
+            skills: &[],
+            skills_prompt_mode: crate::config::SkillsPromptInjectionMode::Full,
+            identity_config: None,
+            dispatcher_instructions: "",
+            tool_descriptions: None,
+            security_summary: None,
+            autonomy_level: AutonomyLevel::Supervised,
+        };
+
+        let output = MemorySnapshotSection.build(&ctx).unwrap();
+        assert!(output.contains("## Core Memories (Snapshot)"));
+        assert!(output.contains("snapshot_content_123"));
+
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn memory_snapshot_section_empty_if_no_file() {
+        let workspace =
+            std::env::temp_dir().join(format!("zeroclaw_prompt_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let tools: Vec<Box<dyn Tool>> = vec![];
+        let ctx = PromptContext {
+            workspace_dir: &workspace,
+            model_name: "test-model",
+            tools: &tools,
+            skills: &[],
+            skills_prompt_mode: crate::config::SkillsPromptInjectionMode::Full,
+            identity_config: None,
+            dispatcher_instructions: "",
+            tool_descriptions: None,
+            security_summary: None,
+            autonomy_level: AutonomyLevel::Supervised,
+        };
+
+        let output = MemorySnapshotSection.build(&ctx).unwrap();
+        assert!(output.is_empty());
+
+        let _ = std::fs::remove_dir_all(workspace);
     }
 }
