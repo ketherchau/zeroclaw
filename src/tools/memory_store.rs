@@ -4,17 +4,19 @@ use crate::security::SecurityPolicy;
 use crate::security::policy::ToolOperation;
 use async_trait::async_trait;
 use serde_json::json;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Let the agent store memories — its own brain writes
 pub struct MemoryStoreTool {
     memory: Arc<dyn Memory>,
     security: Arc<SecurityPolicy>,
+    workspace_dir: PathBuf,
 }
 
 impl MemoryStoreTool {
-    pub fn new(memory: Arc<dyn Memory>, security: Arc<SecurityPolicy>) -> Self {
-        Self { memory, security }
+    pub fn new(memory: Arc<dyn Memory>, security: Arc<SecurityPolicy>, workspace_dir: PathBuf) -> Self {
+        Self { memory, security, workspace_dir }
     }
 }
 
@@ -78,12 +80,17 @@ impl Tool for MemoryStoreTool {
             });
         }
 
-        match self.memory.store(key, content, category, None).await {
-            Ok(()) => Ok(ToolResult {
-                success: true,
-                output: format!("Stored memory: {key}"),
-                error: None,
-            }),
+        match self.memory.store(key, content, category.clone(), None).await {
+            Ok(()) => {
+                if let MemoryCategory::Core = category {
+                    let _ = crate::memory::snapshot::export_snapshot(&self.workspace_dir);
+                }
+                Ok(ToolResult {
+                    success: true,
+                    output: format!("Stored memory: {key}"),
+                    error: None,
+                })
+            }
             Err(e) => Ok(ToolResult {
                 success: false,
                 output: String::new(),
@@ -113,7 +120,7 @@ mod tests {
     #[test]
     fn name_and_schema() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem, test_security());
+        let tool = MemoryStoreTool::new(mem, test_security(), _tmp.path().to_path_buf());
         assert_eq!(tool.name(), "memory_store");
         let schema = tool.parameters_schema();
         assert!(schema["properties"]["key"].is_object());
@@ -123,7 +130,7 @@ mod tests {
     #[tokio::test]
     async fn store_core() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem.clone(), test_security());
+        let tool = MemoryStoreTool::new(mem.clone(), test_security(), _tmp.path().to_path_buf());
         let result = tool
             .execute(json!({"key": "lang", "content": "Prefers Rust"}))
             .await
@@ -139,7 +146,7 @@ mod tests {
     #[tokio::test]
     async fn store_with_category() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem.clone(), test_security());
+        let tool = MemoryStoreTool::new(mem.clone(), test_security(), _tmp.path().to_path_buf());
         let result = tool
             .execute(json!({"key": "note", "content": "Fixed bug", "category": "daily"}))
             .await
@@ -150,7 +157,7 @@ mod tests {
     #[tokio::test]
     async fn store_with_custom_category() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem.clone(), test_security());
+        let tool = MemoryStoreTool::new(mem.clone(), test_security(), _tmp.path().to_path_buf());
         let result = tool
             .execute(
                 json!({"key": "proj_note", "content": "Uses async runtime", "category": "project"}),
@@ -167,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn store_missing_key() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem, test_security());
+        let tool = MemoryStoreTool::new(mem, test_security(), _tmp.path().to_path_buf());
         let result = tool.execute(json!({"content": "no key"})).await;
         assert!(result.is_err());
     }
@@ -175,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn store_missing_content() {
         let (_tmp, mem) = test_mem();
-        let tool = MemoryStoreTool::new(mem, test_security());
+        let tool = MemoryStoreTool::new(mem, test_security(), _tmp.path().to_path_buf());
         let result = tool.execute(json!({"key": "no_content"})).await;
         assert!(result.is_err());
     }
@@ -187,7 +194,7 @@ mod tests {
             autonomy: AutonomyLevel::ReadOnly,
             ..SecurityPolicy::default()
         });
-        let tool = MemoryStoreTool::new(mem.clone(), readonly);
+        let tool = MemoryStoreTool::new(mem.clone(), readonly, _tmp.path().to_path_buf());
         let result = tool
             .execute(json!({"key": "lang", "content": "Prefers Rust"}))
             .await
@@ -210,7 +217,7 @@ mod tests {
             max_actions_per_hour: 0,
             ..SecurityPolicy::default()
         });
-        let tool = MemoryStoreTool::new(mem.clone(), limited);
+        let tool = MemoryStoreTool::new(mem.clone(), limited, _tmp.path().to_path_buf());
         let result = tool
             .execute(json!({"key": "lang", "content": "Prefers Rust"}))
             .await

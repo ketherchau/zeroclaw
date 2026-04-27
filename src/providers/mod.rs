@@ -1891,6 +1891,7 @@ pub fn create_routed_provider_with_options(
         providers,
         routes,
         default_model.to_string(),
+        None,
     )))
 }
 

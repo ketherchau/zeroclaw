@@ -7195,6 +7195,7 @@ mod tests {
                 },
             )],
             "default-model".to_string(),
+            None,
         );
 
         let tools_registry: Vec<Box<dyn Tool>> = Vec::new();

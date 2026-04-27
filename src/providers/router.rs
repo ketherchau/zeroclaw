@@ -27,6 +27,7 @@ pub struct RouterProvider {
     providers: Vec<(String, Box<dyn Provider>)>,
     default_index: usize,
     default_model: String,
+    workspace_dir: Option<std::path::PathBuf>,
 }
 
 impl RouterProvider {
@@ -38,6 +39,7 @@ impl RouterProvider {
         providers: Vec<(String, Box<dyn Provider>)>,
         routes: Vec<(String, Route)>,
         default_model: String,
+        workspace_dir: Option<std::path::PathBuf>,
     ) -> Self {
         // Build provider name → index lookup
         let name_to_index: HashMap<&str, usize> = providers
@@ -70,6 +72,7 @@ impl RouterProvider {
             providers,
             default_index: 0,
             default_model,
+            workspace_dir,
         }
     }
 
@@ -135,6 +138,24 @@ impl RouterProvider {
     /// Otherwise, use the default provider with the given model name.
     /// Resolve a model parameter to a (provider_index, actual_model) pair.
     fn resolve(&self, model: &str) -> (usize, String) {
+        // Attempt to load memory snapshot for routing context
+        let snapshot_path = self.workspace_dir
+            .as_ref()
+            .map(|d| d.join("MEMORY_SNAPSHOT.md"))
+            .unwrap_or_else(|| std::path::PathBuf::from("MEMORY_SNAPSHOT.md"));
+            
+        let memory_snapshot = std::fs::read_to_string(&snapshot_path).unwrap_or_default();
+        if !memory_snapshot.is_empty() {
+            tracing::debug!("Routing check: loaded core memory snapshot context (len: {})", memory_snapshot.len());
+            // If the user memory strongly implies routing preference, check for keyword override
+            if memory_snapshot.to_lowercase().contains("prefers fast model") && model.starts_with("hint:") {
+                if let Some((idx, resolved_model)) = self.routes.get("fast") {
+                    tracing::info!("Memory override: routing hint via core preference to 'fast'");
+                    return (*idx, resolved_model.clone());
+                }
+            }
+        }
+
         if let Some(hint) = model.strip_prefix("hint:") {
             if let Some((idx, resolved_model)) = self.routes.get(hint) {
                 return (*idx, resolved_model.clone());
@@ -395,7 +416,7 @@ mod tests {
             })
             .collect();
 
-        let router = RouterProvider::new(provider_list, route_list, "default-model".to_string());
+        let router = RouterProvider::new(provider_list, route_list, "default-model".to_string(), None);
 
         (router, mocks)
     }
@@ -708,6 +729,7 @@ mod tests {
             )],
             vec![],
             "model".into(),
+            None,
         );
 
         let result = router
@@ -728,6 +750,7 @@ mod tests {
             )],
             vec![],
             "model".into(),
+            None,
         );
 
         let messages = vec![ChatMessage {
@@ -854,7 +877,7 @@ mod tests {
                 },
             ),
         ];
-        let router = RouterProvider::new(providers, routes, "default-model".into());
+        let router = RouterProvider::new(providers, routes, "default-model".into(), None);
 
         let prices = make_pricing(vec![("big-model", 15.0, 75.0), ("small-model", 0.25, 1.25)]);
 
@@ -892,7 +915,7 @@ mod tests {
                 },
             ),
         ];
-        let router = RouterProvider::new(providers, routes, "default-model".into());
+        let router = RouterProvider::new(providers, routes, "default-model".into(), None);
 
         let prices = make_pricing(vec![
             ("cheap-model", 0.10, 0.40),
@@ -932,7 +955,7 @@ mod tests {
                 },
             ),
         ];
-        let router = RouterProvider::new(providers, routes, "default-model".into());
+        let router = RouterProvider::new(providers, routes, "default-model".into(), None);
 
         let prices = make_pricing(vec![
             ("basic-model", 0.10, 0.40),
@@ -972,7 +995,7 @@ mod tests {
                 model: "the-model".into(),
             },
         )];
-        let router = RouterProvider::new(providers, routes, "default-model".into());
+        let router = RouterProvider::new(providers, routes, "default-model".into(), None);
 
         let prices = make_pricing(vec![("the-model", 1.0, 2.0)]);
 
@@ -1020,7 +1043,7 @@ mod tests {
                 },
             ),
         ];
-        let router = RouterProvider::new(providers, routes, "default-model".into());
+        let router = RouterProvider::new(providers, routes, "default-model".into(), None);
 
         let prices = make_pricing(vec![
             ("model-a", 10.0, 50.0), // total: 60
@@ -1066,6 +1089,7 @@ mod tests {
                 },
             )],
             "model".into(),
+            None,
         );
 
         assert!(router.supports_streaming());
@@ -1093,6 +1117,7 @@ mod tests {
                 },
             )],
             "model".into(),
+            None,
         );
 
         let messages = vec![ChatMessage::user("hello")];
@@ -1136,6 +1161,7 @@ mod tests {
                 },
             )],
             "model".into(),
+            None,
         );
 
         let messages = vec![ChatMessage::user("hello")];

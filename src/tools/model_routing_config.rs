@@ -224,7 +224,7 @@ impl ModelRoutingConfigTool {
         })
     }
 
-    fn snapshot(cfg: &Config) -> Value {
+    fn snapshot(cfg: &Config, workspace_dir: &std::path::Path) -> Value {
         let mut routes = cfg.model_routes.clone();
         routes.sort_by(|a, b| a.hint.cmp(&b.hint));
 
@@ -277,6 +277,19 @@ impl ModelRoutingConfigTool {
             );
         }
 
+        let memory_path = workspace_dir.join("MEMORY_SNAPSHOT.md");
+        let memory_snapshot = fs::read_to_string(&memory_path).unwrap_or_default();
+        let memory_context = if !memory_snapshot.is_empty() {
+            json!({
+                "loaded": true,
+                "preview": memory_snapshot.chars().take(200).collect::<String>()
+            })
+        } else {
+            json!({
+                "loaded": false
+            })
+        };
+
         json!({
             "default": {
                 "provider": cfg.default_provider,
@@ -290,6 +303,7 @@ impl ModelRoutingConfigTool {
             "scenarios": scenarios,
             "classification_only_rules": classification_only_rules,
             "agents": agents,
+            "memory_routing_context": memory_context,
         })
     }
 
@@ -324,7 +338,7 @@ impl ModelRoutingConfigTool {
         let cfg = self.load_config_without_env()?;
         Ok(ToolResult {
             success: true,
-            output: serde_json::to_string_pretty(&Self::snapshot(&cfg))?,
+            output: serde_json::to_string_pretty(&Self::snapshot(&cfg, &cfg.workspace_dir))?,
             error: None,
         })
     }
@@ -457,7 +471,7 @@ impl ModelRoutingConfigTool {
             success: true,
             output: serde_json::to_string_pretty(&json!({
                 "message": "Default provider/model settings updated",
-                "config": Self::snapshot(&cfg),
+                "config": Self::snapshot(&cfg, &cfg.workspace_dir),
             }))?,
             error: None,
         })
@@ -620,7 +634,7 @@ impl ModelRoutingConfigTool {
             output: serde_json::to_string_pretty(&json!({
                 "message": "Scenario route upserted",
                 "hint": hint,
-                "config": Self::snapshot(&cfg),
+                "config": Self::snapshot(&cfg, &cfg.workspace_dir),
             }))?,
             error: None,
         })
@@ -665,7 +679,7 @@ impl ModelRoutingConfigTool {
                 "hint": hint,
                 "routes_removed": routes_removed,
                 "classification_rules_removed": rules_removed,
-                "config": Self::snapshot(&cfg),
+                "config": Self::snapshot(&cfg, &cfg.workspace_dir),
             }))?,
             error: None,
         })
@@ -779,7 +793,7 @@ impl ModelRoutingConfigTool {
             output: serde_json::to_string_pretty(&json!({
                 "message": "Delegate agent upserted",
                 "name": name,
-                "config": Self::snapshot(&cfg),
+                "config": Self::snapshot(&cfg, &cfg.workspace_dir),
             }))?,
             error: None,
         })
@@ -800,7 +814,7 @@ impl ModelRoutingConfigTool {
             output: serde_json::to_string_pretty(&json!({
                 "message": "Delegate agent removed",
                 "name": name,
-                "config": Self::snapshot(&cfg),
+                "config": Self::snapshot(&cfg, &cfg.workspace_dir),
             }))?,
             error: None,
         })
