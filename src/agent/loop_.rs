@@ -319,6 +319,7 @@ async fn build_context(
 
         let relevant: Vec<_> = entries
             .iter()
+            .filter(|e| e.category != MemoryCategory::Core) // Skip core as they are in system prompt
             .filter(|e| match e.score {
                 Some(score) => score >= min_relevance_score,
                 None => true,
@@ -8041,6 +8042,33 @@ Tail"#;
 
         let recalled = mem.recall("45", 5, None, None, None).await.unwrap();
         assert!(recalled.iter().any(|entry| entry.content.contains("45")));
+    }
+
+    #[tokio::test]
+    async fn build_context_ignores_core_memories() {
+        let tmp = TempDir::new().unwrap();
+        let mem = SqliteMemory::new(tmp.path()).unwrap();
+        mem.store(
+            "core_memory_key",
+            "This is a core memory",
+            MemoryCategory::Core,
+            None,
+        )
+        .await
+        .unwrap();
+        mem.store(
+            "conversation_memory_key",
+            "This is a conversation memory",
+            MemoryCategory::Conversation,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let context = build_context(&mem, "memory", 0.0, None).await;
+        assert!(context.contains("conversation_memory_key"));
+        assert!(!context.contains("core_memory_key"));
+        assert!(!context.contains("This is a core memory"));
     }
 
     #[tokio::test]
