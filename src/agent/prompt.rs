@@ -96,10 +96,15 @@ impl PromptSection for MemorySnapshotSection {
     }
 
     fn build(&self, ctx: &PromptContext<'_>) -> Result<String> {
-        let snapshot_path = ctx.workspace_dir.join("MEMORY_SNAPSHOT.md");
+        let snapshot_path = ctx.workspace_dir.join(crate::memory::snapshot::SNAPSHOT_FILENAME);
         if snapshot_path.exists() {
-            let content = std::fs::read_to_string(snapshot_path)?;
-            Ok(format!("## Core Memories (Snapshot)\n\n{content}"))
+            match std::fs::read_to_string(snapshot_path) {
+                Ok(content) => Ok(format!("## Core Memories (Snapshot)\n\n{content}")),
+                Err(e) => {
+                    tracing::warn!("Failed to read memory snapshot: {e}");
+                    Ok(String::new())
+                }
+            }
         } else {
             Ok(String::new())
         }
@@ -706,7 +711,11 @@ mod tests {
         let workspace =
             std::env::temp_dir().join(format!("zeroclaw_prompt_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&workspace).unwrap();
-        std::fs::write(workspace.join("MEMORY_SNAPSHOT.md"), "snapshot_content_123").unwrap();
+        std::fs::write(
+            workspace.join(crate::memory::snapshot::SNAPSHOT_FILENAME),
+            "snapshot_content_123",
+        )
+        .unwrap();
 
         let tools: Vec<Box<dyn Tool>> = vec![];
         let ctx = PromptContext {
